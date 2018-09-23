@@ -12,6 +12,11 @@
 #include <Main.h>
 
 
+#include <SDL_ttf.h>
+#include <SDL_image.h>
+#include <SDL_mixer.h>
+#include <string>
+#include <sstream>
 //Dimension de la Pantalla
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
@@ -26,12 +31,23 @@ int a;
 float c = 0;
 float b = 1;
 
+// La música que se reproducirá
+Mix_Music *gMusic = NULL;
+
+// Los efectos de sonido que se usarán
+Mix_Chunk *gScratch = NULL;
+Mix_Chunk *gHigh = NULL;
+Mix_Chunk *gMedium = NULL;
+Mix_Chunk *gLow = NULL;
+
 //Bandera principal
 bool quit = false;
 
 
 //Iniciamos SDL, crea una ventana en OpenGL
 bool init();
+
+bool loadMedia();
 
 //Matrices de colores
 bool initGL();
@@ -61,7 +77,7 @@ bool init()
 	bool success = true;
 
 	//Inicializamos SDL
-	if (SDL_Init(SDL_INIT_VIDEO) < 0)
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0)
 	{
 		printf("SDL could not initialize! SDL Error: %s\n", SDL_GetError());
 		success = false;
@@ -102,8 +118,69 @@ bool init()
 					printf("Unable to initialize OpenGL!\n");
 					success = false;
 				}
+				
+
+				//Initialize SDL_mixer
+				if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
+				{
+					printf("SDL_mixer could not initialize! SDL_mixer Error: %s\n", Mix_GetError());
+					success = false;
+				}
 			}
 		}
+	}
+
+	return success;
+}
+
+
+bool loadMedia()
+{
+	//Loading success flag
+	bool success = true;
+
+	//Load prompt texture
+	//if (!gPromptTexture.loadFromFile("21_sound_effects_and_music/prompt.png"))
+	//{
+		//printf("Failed to load prompt texture!\n");
+		//success = false;
+	//}
+	
+	//Load music
+	gMusic = Mix_LoadMUS("beat.wav");
+	if (gMusic == NULL)
+	{
+		printf("Failed to load beat music! SDL_mixer Error: %s\n", Mix_GetError());
+		success = false;
+	}
+
+	//Load sound effects
+	gScratch = Mix_LoadWAV("scratch.wav");
+	if (gScratch == NULL)
+	{
+		printf("Failed to load scratch sound effect! SDL_mixer Error: %s\n", Mix_GetError());
+		success = false;
+	}
+
+	gHigh = Mix_LoadWAV("high.wav");
+	if (gHigh == NULL)
+	{
+		printf("Failed to load high sound effect! SDL_mixer Error: %s\n", Mix_GetError());
+		success = false;
+	}
+
+	gMedium = Mix_LoadWAV("medium.wav");
+	if (gMedium == NULL)
+	{
+		printf("Failed to load medium sound effect! SDL_mixer Error: %s\n", Mix_GetError());
+		success = false;
+	}
+
+	gLow = Mix_LoadWAV("low.wav");
+	if (gLow == NULL)
+	{
+		printf("Failed to load low sound effect! SDL_mixer Error: %s\n", Mix_GetError());
+		success = false;
 	}
 
 	return success;
@@ -287,11 +364,32 @@ void display()
 
 void close()
 {
+	//Free loaded images
+	//gPromptTexture.free();
+
+	//Free the sound effects
+	Mix_FreeChunk(gScratch);
+	Mix_FreeChunk(gHigh);
+	Mix_FreeChunk(gMedium);
+	Mix_FreeChunk(gLow);
+	gScratch = NULL;
+	gHigh = NULL;
+	gMedium = NULL;
+	gLow = NULL;
+
+	//Free the music
+	Mix_FreeMusic(gMusic);
+	gMusic = NULL;
+
 	//Destruimos la ventana
+	//SDL_DestroyRenderer(gRenderer);
+	//gRenderer = NULL;
 	SDL_DestroyWindow(gWindow);
 	gWindow = NULL;
 
 	//Quitamos todos los subsistemas de SDL
+	Mix_Quit();
+	IMG_Quit();
 	SDL_Quit();
 }
 
@@ -305,65 +403,124 @@ int main(int argc, char* args[])
 	else
 	{
 
-		//Controlador de eventos
-		SDL_Event e;
-
-		//Entrada de texto
-		SDL_StartTextInput();
-
-		while (!quit)
+		if (!loadMedia())
 		{
-			//Handle events on queue
-			while (SDL_PollEvent(&e) != 0)
+			printf("Failed to load media!\n");
+		}
+		else
+		{
+			//Controlador de eventos
+			SDL_Event e;
+
+			//Entrada de texto
+			SDL_StartTextInput();
+
+			while (!quit)
 			{
-				//User requests quit
-				if (e.type == SDL_QUIT)
+				//Handle events on queue
+				while (SDL_PollEvent(&e) != 0)
 				{
-					quit = true;
-				}
-				//Handle keypress with current mouse position
-				else if (e.type == SDL_TEXTINPUT)
-				{
-					int x = 0, y = 0;
-					SDL_GetMouseState(&x, &y);
-					handleKeys(e.text.text[0], x, y);
-				}
-				else if (e.type == SDL_KEYDOWN)
-				{
-					switch (e.key.keysym.sym) {
-					case SDLK_F1:
-						c = 1;
-						b = 1;
-						break;
-					case SDLK_F2:
-						c = .5;
-						b = 0;
-						break;
-					case SDLK_F3:
-						glColor3f(1, 0.5, 0);
-						prisma(); //el color del cuadro es negro						
-						break;
+					//User requests quit
+					if (e.type == SDL_QUIT)
+					{
+						quit = true;
 					}
-				}
-				else if (e.type == SDL_QUIT)
-				{
-					float transX = 0.0;
-					float transZ = 0.0;
-					float angleX = 0.0;
-					float angleY = 0.0;
+					//Handle keypress with current mouse position
+					else if (e.type == SDL_TEXTINPUT)
+					{
+						int x = 0, y = 0;
+						SDL_GetMouseState(&x, &y);
+						handleKeys(e.text.text[0], x, y);
+					}
+					else if (e.type == SDL_KEYDOWN)
+					{
+						switch (e.key.keysym.sym)
+						{
+						case SDLK_F1:
+							c = 1;
+							b = 1;
+							break;
+						case SDLK_F2:
+							c = .5;
+							b = 0;
+							break;
+						case SDLK_F3:
+							glColor3f(1, 0.5, 0);
+							prisma(); //el color del cuadro es negro						
+							break;
+							//Play high sound effect
+						case SDLK_1:
+							Mix_PlayChannel(-1, gHigh, 0);
+							break;
+
+							//Play medium sound effect
+						case SDLK_2:
+							Mix_PlayChannel(-1, gMedium, 0);
+							break;
+
+							//Play low sound effect
+						case SDLK_3:
+							Mix_PlayChannel(-1, gLow, 0);
+							break;
+
+							//Play scratch sound effect
+						case SDLK_4:
+							Mix_PlayChannel(-1, gScratch, 0);
+							break;
+
+						case SDLK_9:
+							//If there is no music playing
+							if (Mix_PlayingMusic() == 0)
+							{
+								//Play the music
+								Mix_PlayMusic(gMusic, -1);
+							}
+							//If music is being played
+							else
+							{
+								//If the music is paused
+								if (Mix_PausedMusic() == 1)
+								{
+									//Resume the music
+									Mix_ResumeMusic();
+								}
+								//If the music is playing
+								else
+								{
+									//Pause the music
+									Mix_PauseMusic();
+								}
+							}
+							break;
+
+						case SDLK_0:
+							//Stop the music
+							Mix_HaltMusic();
+							break;
+						}
+					}
+					else if (e.type == SDL_QUIT)
+					{
+						float transX = 0.0;
+						float transZ = 0.0;
+						float angleX = 0.0;
+						float angleY = 0.0;
+					}
+
 				}
 
+				//Render quad
+				display();
+
+				//Update screen
+				SDL_GL_SwapWindow(gWindow);
 			}
 
-			//Render quad
-			display();
-
-			//Update screen
-			SDL_GL_SwapWindow(gWindow);
+			//Disable text input
+			SDL_StopTextInput();
 		}
-
-		//Disable text input
-		SDL_StopTextInput();
+		
+		
 	}
 
 	//Free resources and close SDL
